@@ -31,7 +31,11 @@ public class MainActivity extends AppCompatActivity {
 
     private RestaurantAdapter mRestaurantAdapter;
     private Location mCurrLocation = null;
-    private static final int REQUEST_CODE_PERMISSION = 1;
+    private final String[] REQUEST_PERMISSIONS = {
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+    };
+    private final int REQUEST_CODE_PERMISSION = 1;
 
     @BindView(R.id.rv_list)
     RecyclerView mRecyclerView;
@@ -40,11 +44,13 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_CODE_PERMISSION);
+        if ((ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED)
+                || (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED)) {
+            ActivityCompat.requestPermissions(this, REQUEST_PERMISSIONS, REQUEST_CODE_PERMISSION);
         } else {
-            mCurrLocation = getLastLocation();
+            mCurrLocation = getCurrLocation();
         }
 
         setContentView(R.layout.activity_main);
@@ -63,13 +69,37 @@ public class MainActivity extends AppCompatActivity {
         queryToServer(zomatoAPI);
     }
 
-    private Location getLastLocation() {
+    private Location getCurrLocation() {
+        LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        Location fineLocation = null;
+        Location coarseLocation = null;
+        Location currLocation = null;
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-            return lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+            if(lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                fineLocation = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            } else if(lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                fineLocation = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+            }
+
         }
 
-        return null;
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            coarseLocation =  lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+        }
+
+        if((fineLocation != null) && (coarseLocation != null)) {
+            if(fineLocation.getAccuracy() < coarseLocation.getAccuracy()) {
+                currLocation = fineLocation;
+            } else {
+                currLocation = coarseLocation;
+            }
+        } else if ((fineLocation != null) && (coarseLocation == null)) {
+            currLocation = fineLocation;
+        } else if ((fineLocation == null) && (coarseLocation != null)) {
+            currLocation = coarseLocation;
+        }
+
+        return currLocation;
     }
 
     private void queryToServer(ZomatoAPI api) {
@@ -91,6 +121,8 @@ public class MainActivity extends AppCompatActivity {
 
                 @Override
                 public void onFailure(Call<SearchResponseModel> call, Throwable t) {
+                    int i = 0;
+                    i += 1;
                 }
             });
         }
@@ -99,8 +131,10 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
         if (requestCode == REQUEST_CODE_PERMISSION) {
-            if((grantResults.length == 1) && (grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
-                mCurrLocation = getLastLocation();
+            if((grantResults.length == REQUEST_PERMISSIONS.length)
+                && ((grantResults[0] == PackageManager.PERMISSION_GRANTED)
+                && (grantResults[1] == PackageManager.PERMISSION_GRANTED))) {
+                mCurrLocation = getCurrLocation();
             } else {
                 this.finish();
             }
